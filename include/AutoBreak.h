@@ -20,6 +20,10 @@ struct BreakCommand {
     double time_to_collision_s;
 };
 
+struct SpeedLimitDetected {
+    double speed_limit;
+};
+
 /*
  * a function that returns void and accepts a speed update parameter
  * std::function needs to know type
@@ -27,7 +31,7 @@ struct BreakCommand {
  */
 using SpeedUpdateCallback = std::function<void(const SpeedUpdate &)>;
 using CarDetectedUpdateCallback = std::function<void(const CarDetected &)>;
-
+using SpeedLimitCallback = std::function<void(const SpeedLimitDetected &)>;
 
 struct I_ServiceBus {
     virtual ~I_ServiceBus() = default;
@@ -35,6 +39,8 @@ struct I_ServiceBus {
     virtual void subscribe(SpeedUpdateCallback) = 0;
 
     virtual void subscribe(CarDetectedUpdateCallback) = 0;
+
+    virtual void subscribe(SpeedLimitCallback) = 0;
 
     virtual void publish(const BreakCommand &) = 0;
 };
@@ -53,21 +59,27 @@ struct MockServiceBus : public I_ServiceBus {
         speed_update_callback = c_b;
     }
 
+    void subscribe(SpeedLimitCallback c_b) override {
+        speed_limit_detected_update_callback = c_b;
+    }
+
     int number_commands_published;
     BreakCommand last_command;
     SpeedUpdateCallback speed_update_callback{};
     CarDetectedUpdateCallback car_detected_update_callback{};
+    SpeedLimitCallback speed_limit_detected_update_callback{};
 };
 
 //autobreak is the class we are unit testing
 struct AutoBreak {
 public:
-    explicit AutoBreak(I_ServiceBus &s) : collision_threshold_s{5} {
+    explicit AutoBreak(I_ServiceBus &s) : collision_threshold_s{5}, last_known_speed_limit{39} {
         s.subscribe([this](const SpeedUpdate &speed_update) {
             /*
-             * this defines what happens when speed_update_callback() is called.
+             * this defines what happens when speed_update_callback() is called. This is done on initialization
              * Remember we said that SpeedUpdateCallback is really std::function<void(const SpeedUpdate&)>
              * This is the function and the implementation we have defined it to update the current speed
+             * We say that the callback should execute this function each time it is called ie update the speed
              */
             speed_mps = speed_update.velocity_mps;
         });
@@ -77,6 +89,14 @@ public:
             const auto collision_time = car_detected.distance_m / relative_velocity;
             if (collision_time > 0 and collision_time < collision_threshold_s) {
                 s.publish(BreakCommand{collision_threshold_s});
+            }
+        });
+
+        s.subscribe([this, &s](const SpeedLimitDetected &new_speed_limit) {
+            last_known_speed_limit = new_speed_limit.speed_limit;
+            if (speed_mps > new_speed_limit.speed_limit) {
+                const auto speed_diff = speed_mps - new_speed_limit.speed_limit;
+                s.publish(BreakCommand{speed_diff});
             }
         });
     }
@@ -96,9 +116,14 @@ public:
         return collision_threshold_s;
     }
 
+    double getLastKnownSpeedLimit() {
+        return last_known_speed_limit;
+    }
+
 private:
     double collision_threshold_s;
     double speed_mps{0};
+    double last_known_speed_limit;
 };
 
 

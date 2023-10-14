@@ -72,4 +72,39 @@ void noAlertWhenImminent() {
     bus.car_detected_update_callback(CarDetected{1000, 0});
     assert_that(bus.number_commands_published == 0, "break commands published not 0");
 };
+
+void initialSpeedLimitIs() {
+    MockServiceBus bus{};
+    AutoBreak auto_break{bus};
+    assert_that(auto_break.getLastKnownSpeedLimit() == 39, "Initial speed limit is not 39");
+}
+
+void speedLimitIsSaved() {
+    MockServiceBus bus{};
+    AutoBreak auto_break{bus};
+    bus.speed_limit_detected_update_callback(SpeedLimitDetected{20});
+    assert_that(auto_break.getLastKnownSpeedLimit() == 20, "speed not saved to 29");
+    bus.speed_limit_detected_update_callback(SpeedLimitDetected{72});
+    assert_that(auto_break.getLastKnownSpeedLimit() == 72, "speed not saved to 72");
+    bus.speed_limit_detected_update_callback(SpeedLimitDetected{40});
+    assert_that(auto_break.getLastKnownSpeedLimit() == 40, "speed not saved to 40");
+}
+
+void noAlertWhenSpeedLimit() {
+    MockServiceBus bus{};
+    AutoBreak auto_break{bus};
+    bus.speed_limit_detected_update_callback(SpeedLimitDetected{35});
+    bus.speed_update_callback(SpeedUpdate{34});
+    assert_that(bus.number_commands_published == 0, "number of commands published not 0");
+}
+
+void alertWhenSpeedLimit() {
+    MockServiceBus bus{};
+    AutoBreak auto_break{bus};
+    bus.speed_limit_detected_update_callback(SpeedLimitDetected{35});
+    bus.speed_update_callback(SpeedUpdate{30});
+    bus.speed_limit_detected_update_callback(SpeedLimitDetected{25});
+    assert_that(bus.number_commands_published == 1, "number of commands published not 1");
+}
+
 #endif //TESTINGPROJECT_TESTCASES_HPP

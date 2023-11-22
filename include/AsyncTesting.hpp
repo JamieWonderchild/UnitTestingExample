@@ -67,7 +67,9 @@ int do_factorization() {
         StopWatch s(elapsed_time);
         for (auto number: numbers) {
             future_tasks.emplace_back(std::async(std::launch::async, factor_task, number));
-            std::cout << factor_task(number);
+        }
+        for (auto& task : future_tasks){
+            std::cout << task.get();
         }
         const auto elapsed_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed_time).count();
         std::cout << elapsed_time_ms << " ms: Total program time \n";
